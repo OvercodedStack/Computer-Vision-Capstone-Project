@@ -1,120 +1,117 @@
+################################################################
+#  Computer vision final project
+#  Medical Lung Detection Program
+#  Written by Esteban Segarra Martinez
+#  OpenCV programme
+#
+################################################################
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
+from pylab import arange,array,uint8
+import math
 import scipy as sy
 
 
 img = cv2.imread('c_1.jpeg')
+#img = cv2.imread('c_3.png')
+############CROP IMAGE TO A DIMENSION AND GRAYSCALE##############
+height = img.shape[0]
+width  = img.shape[1]
+l_marH = int(height*.05)
+r_marH = int(height*.85)
+l_marW = int(width*.1)
+r_marW = int(width*.9)
+img = img[l_marH:r_marH, l_marW:r_marW]
+size = img.shape[0] * img.shape[0]
+graded_size = int(size *.008)
+print(size)
+print(graded_size)
 gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
+
+##############ADJUST CONTRAST#####################################
+maxIntensity = 255.0 # depends on dtype of image data
+x = arange(maxIntensity)
+
+########### Parameters for manipulating image data################
+phi = 1
+theta = .4
+################################################
+gray = (maxIntensity/phi)*(gray/(maxIntensity/theta))**2
+gray = array(gray,dtype=uint8)
+
+
+###########THRESHOLD AND SHARPEN + EQUALIZE########################
 ret, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+kernel_sharpening = np.array([[-1,-1,-1],
+                              [-1, 11,-1],
+                              [-1,-1,-1]])
+gray = cv2.filter2D(gray, -1, kernel_sharpening)
+gray = cv2.equalizeHist(gray)
 
-# __,contours,__ = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-#
-# for item in range(0,len(contours)):
-#     if contours[item].size > 500:
-#         print("ping", contours[item].size, item )
-#
-# #cv2.drawContours(img,contours,73,(0,0,255),1)
-# #cv2.drawContours(img,contours,97,(0,0,255),1)
-# cv2.drawContours(img,contours,294,(0,0,255),1)
-
-
-
-# noise removal
-kernel = np.ones((3,3),np.uint8)
-opening = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,kernel, iterations = 7)
-
-# sure background area
-sure_bg = cv2.dilate(opening,kernel,iterations=7)
-
-# Finding sure foreground area
-dist_transform = cv2.distanceTransform(opening,cv2.DIST_L2,3)
-ret, sure_fg = cv2.threshold(dist_transform,0.6*dist_transform.max(),255,0)
-
-# Finding unknown region
-sure_fg = np.uint8(sure_fg)
-unknown = cv2.subtract(sure_bg,sure_fg)
-
-# Marker labelling
-ret, markers = cv2.connectedComponents(sure_fg)
-
-# Add one to all labels so that sure background is not 0, but 1
-markers = markers+1
-
-# Now, mark the region of unknown with zero
-markers[unknown==255] = 0
-markers = cv2.watershed(img,markers)
-print(type(markers))
-img[markers == -1] = [255,255,255]
-
-
-gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
-#gray = cv2.equalizeHist(gray)
-#ret, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-thresh = cv2.adaptiveThreshold(gray,255,cv2.ADAPTIVE_THRESH_MEAN_C,\
-            cv2.THRESH_BINARY,11,2)
+##############################FIND CONTOURS OF THE LUNGS###############
+ret, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
 __,contours,__ = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-cv2.imshow("gray",gray)
+#cv2.imshow("gray",gray)
 
+######################CROP OUT THE LUNG IMAGES##############################
+out = np.zeros((height, width, 3), np.uint8)
+list_contours = []
+counter = 0
 for item in range(0,len(contours)):
-    if contours[item].size > 500:
-        print("ping", contours[item].size, item )
+    if contours[item].size > graded_size:
+        list_contours[counter] = contours[item]
+        cv2.drawContours(img, contours, item, (0, 0, 255), 1)
+        #print("ping", contours[item].size, item )
+        mask = np.zeros_like(gray)  # Create mask where white is what we want, black otherwise
+        cv2.drawContours(mask, contours, item, 255, -1)  # Draw filled contour in mask
+        out = np.zeros_like(gray)  # Extract out the object and place into output image
+        out[mask == 255] = gray[mask == 255]
 
-cv2.drawContours(img, contours, 16966, (0, 0, 255), 1)
-cv2.drawContours(img,contours,293,(0,0,255),1)
-cv2.drawContours(img,contours,679,(0,0,255),1)
+        # Now crop
+        x, y = np.where(mask == 255)
+        (topx, topy) = (np.min(x), np.min(y))
+        (bottomx, bottomy) = (np.max(x), np.max(y))
+        out = out[topx:bottomx + 1, topy:bottomy + 1]
+        counter += 1
 
-#################We finish image segmentation ##########################
-# #ret,thresh = cv2.threshold(img,255,255,0)
-# im2,contours,hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-# #cv2.findContours(thresh, 1, 2)
-# cnt = contours[0]
-# M = cv2.moments(cnt)
-#
-#
-# print( M )
-#
-#
-# cx = int(M['m10']/M['m00'])
-# cy = int(M['m01']/M['m00'])
-#
-# area = cv2.contourArea(cnt)
-#
-# perimeter = cv2.arcLength(cnt,True)
-#
-# epsilon = 0.1*cv2.arcLength(cnt,True)
-# approx = cv2.approxPolyDP(cnt,epsilon,True)
+###################BLOB DETECTION PHASE #####################################
+out = cv2.GaussianBlur(out,(11,11),0)
 
+
+################################################### Sift####################
+sift = cv2.xfeatures2d.SIFT_create()
+kp = sift.detect(out, None)
+
+#
+# for point in range(0, len(kp)):
+#     for point_2 in range(0,len(list_contours)):
+#         if point > list_contours[point_2]:
+
+
+print(type(kp))
+img = cv2.drawKeypoints(out, kp, img)
 cv2.imshow('image',img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+############################################################################
+
+
+def calc_dist(point_1, point_2):
+    return math
 
 
 
 
-
-#Sift
-sift = cv2.xfeatures2d.SIFT_create()
-kp = sift.detect(img,None)
-
-img=cv2.drawKeypoints(img,kp,img)
-
-
-
-
-img = cv2.imread('c_2.jpeg',cv2.IMREAD_COLOR)
-surf = surf = cv2.xfeatures2d.SURF_create(400)
-surf.setHessianThreshold(1500)
-kp, des = surf.detectAndCompute(img,None)
-img2 = cv2.drawKeypoints(img,kp,None,(255,0,0),4)
-plt.imshow(img2),plt.show()
-
-
-
-
-
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-
-cv2.meanShift()
+#img = cv2.imread('c_2.jpeg',cv2.IMREAD_COLOR)
+#
+# surf = surf = cv2.xfeatures2d.SURF_create(400)
+# surf.setHessianThreshold(2500)
+# kp, des = surf.detectAndCompute(out,None)
+# img2 = cv2.drawKeypoints(img,kp,None,(255,0,0),4)
+# plt.imshow(img2),plt.show()
+#
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+#
 
