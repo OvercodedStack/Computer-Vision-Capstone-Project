@@ -18,7 +18,7 @@ def _main():
 	X_train, X_test, Y_train, Y_test = model_selection.train_test_split(X, Y, test_size=test_size, random_state=seed)
 	
 	# make predictions on test dataset
-	svm = SVMClassifier()
+	svm = SVC()
 	_train(svm, X_train, Y_train, X_test, Y_test)
 	
 	#If using KMeans
