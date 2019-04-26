@@ -7,6 +7,7 @@ from sklearn import model_selection
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 from sklearn import preprocessing as prep
+from sklearn.utils.multiclass import unique_labels
 
 from sklearn import KMeans
 from sklearn.svm import SVC
@@ -74,7 +75,7 @@ def _Learning(descriptor_list, n_clusters, n_images, train_labels, ret=None, std
 	
 	#display trained vocabulary
 	vocabulary = mega_histogram
-	x_scaler = np.arrange(n_clusters)
+	x_scaler = np.arange(n_clusters)
 	y_scalar = np.array([abs(np.sum(vocabulary[:,h], dtypes=np.int32)) for h in range(n_clusters)])
 	plt.bar(x_scaler,y_scalar)
 	plt.xlabel("Visual Word Index")
@@ -105,7 +106,31 @@ def _train(alg, X_train, Y_train, X_test, Y_test):
 
 def _predictAndAccuracy(alg, X_test, Y_test):
 	predictions = alg.predict(X_test)
-	print(confusion_matrix(Y_test, predictions))
+	#print(confusion_matrix(Y_test, predictions))
+	class_names = ??????
+	plot_confusion_matrix(Y_test, predictions,class_names)
 	print("Accuracy: %0.2f" % (accuracy_score(Y_test, predictions)))
 
+def predictImg(self, testImg, n_clusters):
+	#n_clusters should be same from _Learning
+	#first do SIFT/whatever being used for that part
+
+def plotConfusionMatrix(y_true,y_pred,classes,cmap=plt.cm.Blues):
+	title = "Normalized confusion matrix"
+	cm = confusion_matrix(y_true,y_pred)
+	classes = classes[unique_labels(y_true,y_pred)]
+	cm = cm.astype('float') / cm.sum(axis=1)[:,np.newaxis]
+	fig, ax = plt.subplots()
+	im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+	ax.figure.colorbar(im,ax=ax)
+	ax.set(xticks=np.arange(cm.shape[1]),yticks=np.arange(cm.shape[0]),xtickslabels=classes,ytickslabels=classes,title=title,ylabel='True Label',xlabel='Predicted Label')
+	plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+	fmt = '.2f'
+	thresh = cm.max() / 2.
+	for i in range(cm.shape[0]):
+		for j in range(cm.shape[1]):
+			ax.text(j, i, format(cm[i,j],fmt),ha="center",va="center",color="white" if cm[i, j] > thresh else "black")
+			fig.tight_layout()
+			return ax
+	
 _main()
