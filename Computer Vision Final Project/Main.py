@@ -20,9 +20,15 @@ from sklearn.cluster import KMeans
 from sklearn.svm import SVC
 from sklearn.datasets import make_blobs
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.multiclass import unique_labels
+
+
 filenames = glob.glob("TestingImages/Cancer/*.png")
 filenames.sort()
 images = [cv2.imread(img) for img in filenames]
+DISPLAY_RESULTS = False
+DO_HAVE_CANCER = True
+
 class CompVisionFinal:
     threshold_dist =20.0
     def nothing(self,data):
@@ -32,7 +38,9 @@ class CompVisionFinal:
         # cv2.namedWindow('Image')
         # cv2.createTrackbar('Value 1','Image',0,255,self.nothing)
         # cv2.createTrackbar('Value 2','Image', 0, 255, self.nothing)
-        cv2.imshow("Preview Image", img)
+        orig = img
+        if DISPLAY_RESULTS == True:
+            cv2.imshow("Preview Image", img)
         ############CROP IMAGE TO A DIMENSION AND GRAYSCALE##############
         height = img.shape[0]
         width  = img.shape[1]
@@ -115,9 +123,13 @@ class CompVisionFinal:
         self.samples_out = self.generate_samples(gray,kp)
         #########################DRAW DATA ############################################
         img = cv2.drawKeypoints(out,kp_cancer, None,(255,0,0))
-        cv2.imshow('image',img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        self.scaling_out = (img.shape[0]*img.shape[1]) / (orig.shape[0]*orig.shape[1])
+
+
+        if DISPLAY_RESULTS == True:
+            cv2.imshow('image',img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
         ############################################################################
 
     #Returns the keypoints of the image
@@ -129,6 +141,9 @@ class CompVisionFinal:
 
     def get_samples(self):
         return self.samples_out
+
+    def get_scaling_ratio(self):
+        return self.scaling_out
 
     def take_snippet(selfs,point,image):
         size = 16, 16, 3
@@ -236,17 +251,53 @@ class CompVisionFinal:
                  list_of_nodes.append(pt)
             accumulator = 0
         return list_of_nodes
+########################################################################################################################
 
 
+
+
+########################################################################################################################
 class Learning:
-    def __init__(self,images):
+    def __init__(self,images,filenames):
         training_labels = ["Nothing wrong", "Cancer", "Other Problems"]
+        data_results = []
+        counter = 0
         for img in images:
+            img_data_info  = [None] * 3
+            img_data_info[0] =filenames[counter]
             spotter = CompVisionFinal(img)
-
             des = spotter.get_des()
+
+            print(len(spotter.get_kp()))
+            print(spotter.get_scaling_ratio())
+            if ( len(spotter.get_kp()) >= (900 * spotter.get_scaling_ratio() *(9000/45000) )):
+                img_data_info[1] = 'True'
+            else:
+                img_data_info[1] = 'False'
+
             sampleImages = spotter.get_samples()
             self._Learning(des,5, sampleImages,training_labels)
+
+            img_data_info[2] = self.accuracy_out
+            data_results.append(img_data_info)
+            print("================END RESULTS OF IMG %d ==============================================" % counter)
+
+            counter += 1
+        self.print_end_results(data_results)
+
+
+    def print_end_results(self,img_data_results):
+        print("===================Name of Image ------------- Is Dieseased? -- Accuracy %======================")
+        tally = 0.0
+        for item in img_data_results:
+            if item[1] == 'True' and DO_HAVE_CANCER:
+                tally += 1
+            elif item[1] == 'False' and DO_HAVE_CANCER == False :
+                tally += 1
+            print ("Img: %s, R: %s , ACC: %f " % (item[0],item[1],item[2]))
+        tally = tally/len(img_data_results)
+        print("Percent total of correct results: %f" % tally)
+
 
     def _Learning(self,descriptor_list, n_clusters, n_images, train_labels, ret=None, std=None):
         # set up model
@@ -268,23 +319,27 @@ class Learning:
             l = len(descriptor_list[i])
             for j in range(l):
                 if ret is None:
-                    idx = kmeans_ret[old_count + j]
+                    try:
+                        idx = kmeans_ret[old_count + j]
+                    except:
+                        pass
                 else:
                     idx = ret[old_count + j]
                 mega_histogram[i][idx] += 1
             old_count += 1
         print("Vocabulary Histogram Generated")
 
-        # display trained vocabulary
-        vocabulary = mega_histogram
-        x_scaler = np.arange(n_clusters)
-        y_scalar = np.array([abs(np.sum(vocabulary[:, h])) for h in range(n_clusters)])
-        plt.bar(x_scaler, y_scalar)
-        plt.xlabel("Visual Word Index")
-        plt.ylabel("Frequency")
-        plt.title("Complete Vocabulary Generated")
-        plt.xticks(x_scaler + 0.4, x_scaler)
-        plt.show()
+        if DISPLAY_RESULTS == True:
+            # display trained vocabulary
+            vocabulary = mega_histogram
+            x_scaler = np.arange(n_clusters)
+            y_scalar = np.array([abs(np.sum(vocabulary[:, h])) for h in range(n_clusters)])
+            plt.bar(x_scaler, y_scalar)
+            plt.xlabel("Visual Word Index")
+            plt.ylabel("Frequency")
+            plt.title("Complete Vocabulary Generated")
+            plt.xticks(x_scaler + 0.4, x_scaler)
+            plt.show()
 
         # standardize
         if std is None:
@@ -301,8 +356,7 @@ class Learning:
         # train--USES SVC!!
         clf = SVC()
         clf.fit(mega_histogram, training_wheels)
-        self._predictAndAccuracy(clf,mega_histogram,training_wheels)
-
+        self._predictAndAccuracy(clf, mega_histogram, training_wheels)
 
 
     def _SVC(self):
@@ -326,6 +380,7 @@ class Learning:
         predictions = alg.predict(X_test)
         print(confusion_matrix(Y_test, predictions))
         print("Accuracy: %0.2f" % (accuracy_score(Y_test, predictions)))
+        self.accuracy_out = accuracy_score(Y_test, predictions)
 
     def _KMeansTemp(self):  # copied from the given website, used for reference for KMeansFinal
         # load data in
@@ -345,8 +400,27 @@ class Learning:
         ax[1].set_title("Colored Partition denoting Clusters")
         plt.show()
 
+    def plotConfusionMatrix(self, y_true, y_pred, classes, cmap=plt.cm.colors):
+        title = "Normalized confusion matrix"
+        cm = confusion_matrix(y_true, y_pred)
+        classes = classes[unique_labels(y_true, y_pred)]
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        fig, ax = plt.subplots()
+        im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+        ax.figure.colorbar(im, ax=ax)
+        ax.set(xticks=np.arange(cm.shape[1]), yticks=np.arange(cm.shape[0]), xtickslabels=classes, ytickslabels=classes,
+               title=title, ylabel='True Label', xlabel='Predicted Label')
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+        fmt = '.2f'
+        thresh = cm.max() / 2.
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                ax.text(j, i, format(cm[i, j], fmt), ha="center", va="center",
+                        color="white" if cm[i, j] > thresh else "black")
+                fig.tight_layout()
+                return ax
 
 
-test_2 = Learning(images)
+test_2 = Learning(images,filenames)
 
 
