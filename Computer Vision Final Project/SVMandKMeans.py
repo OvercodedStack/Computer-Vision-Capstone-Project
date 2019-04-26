@@ -6,6 +6,7 @@ import matplotlib as plt
 from sklearn import model_selection
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
+from sklearn import preprocessing as prep
 
 from sklearn import KMeans
 from sklearn.svm import SVC
@@ -85,7 +86,7 @@ def _Learning(descriptor_list, n_clusters, n_images, train_labels, ret=None, std
 	
 	#standardize
 	if std is None:
-		scale = StandardScaler().fit(mega_histogram)
+		scale = prep.StandardScaler().fit(mega_histogram)
 		mega_histogram = scale.transform(mega_histogram)
 	else:
 		mega_histogram = std.transform(mega_histogram)
