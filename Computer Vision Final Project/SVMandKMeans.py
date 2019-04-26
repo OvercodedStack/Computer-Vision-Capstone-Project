@@ -70,22 +70,30 @@ def _Learning(descriptor_list, n_clusters, n_images, train_labels, ret=None, std
 				idx = ret[old_count+j]
 			mega_histogram[i][idx]+=1
 		old_count+=1
-	print "Vocabulary Histogram Generated"
+	
+	#display trained vocabulary
+	vocabulary = mega_histogram
+	x_scaler = np.arrange(n_clusters)
+	y_scalar = np.array([abs(np.sum(vocabulary[:,h], dtypes=np.int32)) for h in range(n_clusters)])
+	plt.bar(x_scaler,y_scalar)
+	plt.xlabel("Visual Word Index")
+	plt.ylabel("Frequency")
+	plt.title("Complete Vocabulary Generated")
+	plt.xticks(x_scaler+0.4,x_scaler)
+	plt.show()
+	
 	
 	#standardize
 	if std is None:
 		scale = StandardScaler().fit(mega_histogram)
 		mega_histogram = scale.transform(mega_histogram)
 	else:
-		print "An external STD has been supplied. Applying to histogram"
 		mega_histogram = std.transform(mega_histogram)
 	
 	#train--USES SVC!!
-	print "Training the SVM Model"
-	print "Training labels: ",train_labels
 	clf = SVC()
 	self.clf.fit(mega_histogram,train_labels)
-	print "Training has completed"
+	
 	
 		
 #####################################################
